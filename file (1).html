@@ -1,0 +1,1550 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Music</title>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <link rel="icon" href="music-icon.png">
+
+  <style>
+    .clock-small {
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.track[draggable="true"] {
+  cursor: grab;
+}
+
+.track.dragging {
+  opacity: 0.4;
+}
+
+.track.drag-over {
+  outline: 1px solid var(--accent);
+}
+
+.clock-small:hover {
+  color: var(--text);
+}
+    :root {
+      color-scheme: light;
+      --bg: #f5f1e8;
+      --sidebar: #efe8df;
+      --panel: #f8f5f0;
+      --hover: #e7e0d5;
+      --text: #1d1b18;
+      --muted: #6a625b;
+      --soft: #8f857d;
+      --accent: #8ca36b;
+      --accent-strong: #6a7d48;
+      --border: #d7cfc1;
+      --shadow: rgba(29, 27, 24, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      height: 100vh;
+      overflow: hidden;
+      color: var(--text);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.3), rgba(255,255,255,0)),
+        var(--bg);
+      font: 14px/1.45 system-ui, sans-serif;
+    }
+
+    button, input { font: inherit; }
+
+    .app {
+      display: grid;
+      grid-template-columns: 245px minmax(0, 1fr);
+      height: calc(100vh - 82px);
+    }
+
+    /* Notes-style left navigation */
+    .sidebar {
+      overflow-y: auto;
+      padding: 12px 10px;
+      background: rgba(239, 232, 223, 0.9);
+      border-right: 1px solid var(--border);
+      box-shadow: inset -1px 0 0 rgba(255,255,255,0.18);
+    }
+
+    .side-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 2px 5px 12px;
+    }
+
+    .side-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+    }
+
+    .home-link {
+      color: var(--text);
+      font-weight: 650;
+      text-decoration: none;
+    }
+
+    .clock-small { color: var(--muted); font-size: 11px; }
+    .side-button {
+      color: var(--muted);
+      background: rgba(255,255,255,0.2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 5px 9px;
+      cursor: pointer;
+      font-size: 11px;
+      line-height: 1;
+    }
+
+    .plus {
+      color: var(--muted);
+      background: none;
+      border: 0;
+      cursor: pointer;
+      font-size: 20px;
+    }
+
+    .search {
+      width: 100%;
+      margin-bottom: 12px;
+      padding: 9px 10px;
+      color: var(--text);
+      background: rgba(255,255,255,0.3);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      outline: none;
+    }
+
+    .search:focus { border-color: var(--accent-strong); }
+
+    .sidebar-label {
+      margin: 14px 7px 6px;
+      color: var(--soft);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    .playlist-form {
+      display: none;
+      margin: 10px 4px 8px;
+      padding: 10px;
+      background: #1d1f1b;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    .playlist-form.visible {
+      display: block;
+    }
+
+    .playlist-form input[type="text"] {
+      width: 100%;
+      margin-bottom: 8px;
+      padding: 8px 9px;
+      color: var(--text);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+
+    .playlist-form input[type="file"] {
+      width: 100%;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .playlist-form-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .playlist-form-actions button {
+      padding: 7px 10px;
+      border: 0;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .playlist-form-actions .save-playlist {
+      color: #16200e;
+      background: var(--accent);
+    }
+
+    .playlist-form-actions .cancel-playlist {
+      color: var(--text);
+      background: #2a2d28;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      min-height: 32px;
+      padding: 6px 9px;
+      overflow: hidden;
+      color: var(--text);
+      text-align: left;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      background: transparent;
+      border: 0;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.18s ease, transform 0.18s ease;
+    }
+
+    .nav-item:hover, .nav-item.active {
+      background: rgba(255,255,255,0.38);
+      box-shadow: inset 0 0 0 1px rgba(106,125,72,0.09);
+    }
+    .nav-item.active { color: var(--text); }
+    .nav-icon { width: 16px; color: var(--muted); text-align: center; }
+    .nav-indent-1 { padding-left: 24px; }
+    .nav-indent-2 { padding-left: 42px; }
+    .nav-indent-3 { padding-left: 60px; }
+    .nav-subtle { color: var(--muted); font-size: 12px; }
+
+    .chat-user-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .chat-user {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      width: 100%;
+      padding: 8px 9px;
+      color: var(--text);
+      text-align: left;
+      background: transparent;
+      border: 0;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .chat-user:hover, .chat-user.active {
+      background: rgba(255,255,255,0.38);
+    }
+
+    .chat-user-name {
+      font-weight: 600;
+      line-height: 1.3;
+    }
+
+    .chat-user-status {
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    .playlist-thumb {
+      flex-shrink: 0;
+      display: grid;
+      place-items: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 5px;
+      background-size: cover;
+      background-position: center;
+      color: #edf0e3;
+      font-size: 10px;
+      font-weight: 700;
+      border: 1px solid rgba(255,255,255,0.08);
+      overflow: hidden;
+      background-color: #3d432e;
+    }
+
+    .playlist-thumb.placeholder {
+      background: linear-gradient(145deg, #414a30, #171a15 55%, #74814e);
+    }
+
+    .period-box {
+      margin: 14px 4px 4px;
+      padding: 10px;
+      color: var(--muted);
+      background: rgba(255,255,255,0.24);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      font-size: 11px;
+    }
+
+    .settings-panel {
+      display: none;
+      margin: 10px 4px 0;
+      padding: 10px;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .settings-panel.visible {
+      display: block;
+    }
+
+    .settings-panel strong {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--text);
+      font-size: 12px;
+    }
+
+    .settings-panel .mini-info {
+      margin-top: 6px;
+      color: var(--soft);
+      line-height: 1.5;
+    }
+
+    .period-box strong {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    .period-box input {
+      width: 100%;
+      margin-top: 6px;
+      padding: 5px;
+      color: var(--text);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+    }
+
+    /* Main music area */
+    .main {
+      overflow-y: auto;
+      background:
+        linear-gradient(180deg, rgba(140,163,107,0.08), transparent 280px),
+        var(--bg);
+    }
+
+    .main-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 30px clamp(20px, 4vw, 52px) 42px;
+    }
+
+    .music-view {
+      display: block;
+    }
+
+    .main-inner.chat-view .music-view {
+      display: none;
+    }
+
+    .album-heading {
+      display: flex;
+      align-items: end;
+      gap: 24px;
+      min-height: 205px;
+      margin-bottom: 24px;
+    }
+
+    .cover {
+      display: grid;
+      flex: 0 0 185px;
+      width: 185px;
+      height: 185px;
+      place-items: center;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 68% 28%, rgba(255,255,255,0.25) 0 7%, transparent 8%),
+        radial-gradient(circle at 28% 72%, rgba(118,132,89,0.3) 0 18%, transparent 19%),
+        linear-gradient(145deg, #becaa0, #5d6e44 55%, #2d3128);
+      border: 1px solid rgba(90, 96, 83, 0.35);
+      border-radius: 8px;
+      box-shadow: 0 9px 24px rgba(29, 27, 24, 0.12);
+      color: #f7f5ef;
+      font-size: 34px;
+      font-weight: 800;
+      letter-spacing: -.08em;
+      text-align: center;
+      transition: transform 0.18s ease, box-shadow 0.18s ease;
+      cursor: pointer;
+    }
+
+    .cover:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 26px rgba(29, 27, 24, 0.16);
+    }
+
+    .album-info { min-width: 0; }
+    .eyebrow { margin-bottom: 7px; color: var(--text); font-size: 12px; }
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(38px, 7vw, 76px);
+      line-height: .98;
+      letter-spacing: -.055em;
+    }
+
+    .album-meta { color: var(--muted); font-size: 13px; }
+    .album-meta strong { color: var(--text); }
+
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 22px 0 18px;
+    }
+
+    .round-button {
+      display: grid;
+      width: 42px;
+      height: 42px;
+      place-items: center;
+      color: var(--text);
+      background: rgba(255,255,255,0.35);
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      cursor: pointer;
+    }
+
+    .round-button.primary {
+      width: 50px;
+      height: 50px;
+      color: #f6f2eb;
+      background: var(--accent-strong);
+      font-size: 19px;
+      border: none;
+    }
+
+    .add-music {
+      padding: 9px 13px;
+      color: #f8f7f3;
+      background: var(--accent-strong);
+      border-radius: 7px;
+      cursor: pointer;
+      font-weight: 700;
+      box-shadow: 0 6px 14px rgba(106,125,72,0.18);
+    }
+
+    #fileInput { display: none; }
+
+    .chat-panel {
+      display: none;
+      width: min(920px, 100%);
+      min-height: 680px;
+      margin: 0 auto;
+      background: rgba(245, 241, 232, 0.98);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: 0 14px 30px rgba(29,27,24,0.08);
+      overflow: hidden;
+      z-index: 20;
+    }
+
+    .main-inner.chat-view .chat-panel {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .chat-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      background: rgba(255,255,255,0.18);
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    .chat-close {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      font-size: 20px;
+      cursor: pointer;
+    }
+
+    .chat-messages {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-height: 120px;
+      max-height: 200px;
+      padding: 14px;
+      overflow-y: auto;
+      background: rgba(255,255,255,0.12);
+    }
+
+    .chat-bubble {
+      max-width: 75%;
+      padding: 8px 10px;
+      border-radius: 12px;
+      line-height: 1.4;
+      font-size: 13px;
+    }
+
+    .chat-bubble.incoming {
+      align-self: flex-start;
+      background: rgba(255,255,255,0.35);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .chat-bubble.outgoing {
+      align-self: flex-end;
+      background: rgba(140,163,107,0.18);
+      color: var(--text);
+      border: 1px solid rgba(106,125,72,0.18);
+    }
+
+    .chat-input-row {
+      display: flex;
+      gap: 8px;
+      padding: 12px 14px 14px;
+      border-top: 1px solid var(--border);
+      background: rgba(255,255,255,0.08);
+    }
+
+    .chat-input-row input {
+      flex: 1;
+      min-width: 0;
+      padding: 9px 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.18);
+      color: var(--text);
+    }
+
+    .chat-input-row button {
+      padding: 9px 12px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--accent-strong);
+      color: #f7f5f1;
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    .tracks-head {
+      display: grid;
+      grid-template-columns: 38px minmax(0, 1fr) 80px 34px;
+      gap: 12px;
+      padding: 9px 12px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+    }
+
+    .track {
+      display: grid;
+      grid-template-columns: 38px minmax(0, 1fr) 80px 34px;
+      gap: 12px;
+      align-items: center;
+      min-height: 54px;
+      padding: 7px 12px;
+      color: var(--muted);
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .track:hover, .track.playing { background: rgba(255,255,255,0.28); }
+    .track.playing .track-title { color: var(--accent-strong); }
+    .track-number { text-align: center; }
+    .track-title { overflow: hidden; color: var(--text); text-overflow: ellipsis; white-space: nowrap; }
+    .track-time { font-variant-numeric: tabular-nums; }
+    .remove {
+      color: var(--muted);
+      background: transparent;
+      border: 0;
+      cursor: pointer;
+      font-size: 18px;
+    }
+
+    .empty {
+      padding: 48px 16px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    /* Bottom player */
+    .player {
+      position: fixed;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 5;
+      height: 82px;
+      display: grid;
+      grid-template-columns: minmax(150px, 1fr) minmax(240px, 1.5fr) minmax(120px, 1fr);
+      align-items: center;
+      gap: 18px;
+      padding: 10px 18px;
+      background: rgba(250,247,242,0.96);
+      border-top: 1px solid var(--border);
+      box-shadow: 0 -8px 20px rgba(29,27,24,0.04);
+    }
+
+    .now-playing { min-width: 0; }
+    .now-playing strong, .now-playing span {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .now-playing span { color: var(--muted); font-size: 12px; }
+
+    .player-center { min-width: 0; }
+    .controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      margin-bottom: 5px;
+    }
+
+    .control {
+      padding: 2px;
+      color: var(--muted);
+      background: none;
+      border: 0;
+      cursor: pointer;
+      font-size: 16px;
+    }
+
+    .control:hover { color: var(--text); }
+    .control.main { color: var(--text); font-size: 19px; }
+
+    .progress-row {
+      display: grid;
+      grid-template-columns: 36px minmax(0, 1fr) 36px;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    input[type="range"] { accent-color: var(--accent); cursor: pointer; }
+    #progress { width: 100%; height: 4px; }
+
+    .player-right { display: flex; justify-content: end; }
+    #volume { width: 95px; }
+
+    audio { display: none; }
+
+    @media (max-width: 700px) {
+      .app { grid-template-columns: 175px minmax(0, 1fr); }
+      .sidebar { padding: 9px 7px; }
+      .main-inner { padding: 22px 16px 35px; }
+      .album-heading { align-items: center; gap: 15px; min-height: auto; }
+      .cover { flex-basis: 112px; width: 112px; height: 112px; font-size: 23px; }
+      h1 { font-size: 38px; }
+      .player {
+        grid-template-columns: 1fr auto;
+        height: 76px;
+        gap: 10px;
+        padding: 8px 12px;
+      }
+      .player-center { grid-column: 1 / -1; grid-row: 2; }
+      .player { height: 112px; }
+      .player-right { display: none; }
+      .now-playing { grid-column: 1; grid-row: 1; }
+      .controls { position: absolute; top: 14px; right: 14px; }
+      .progress-row { margin-top: 4px; }
+      body { overflow: hidden; }
+      .app { height: calc(100vh - 112px); }
+    }
+
+    @media (max-width: 470px) {
+      .app { grid-template-columns: 135px minmax(0, 1fr); }
+      .album-heading { flex-direction: column; align-items: start; }
+      .cover { width: 100px; height: 100px; flex-basis: 100px; }
+      h1 { font-size: 32px; }
+      .tracks-head, .track {
+        grid-template-columns: 24px minmax(0, 1fr) 34px;
+        gap: 6px;
+        padding-right: 6px;
+        padding-left: 6px;
+      }
+      .tracks-head span:nth-child(3), .track-time { display: none; }
+    }
+
+    .clock-small {
+      color: var(--muted);
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="side-top">
+        <a class="home-link" href="https://notesfromaltitude.com">Home</a>
+        <div class="side-actions">
+          <button class="side-button" id="chatButton" type="button">Chat</button>
+          <button class="side-button" id="settingsButton" type="button">Settings</button>
+          <a
+            class="clock-small"
+            id="clock"
+            href="https://notesfromaltitude.com/clock.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Open clock in a new tab"
+          >--:--</a>
+        </div>
+        <button class="plus" id="newPlaylist" title="New playlist">＋</button>
+      </div>
+
+      <input class="search" id="search" type="search" placeholder="Search">
+
+      <button class="nav-item" data-view="all">
+        <span class="nav-icon">♫</span> All music
+      </button>
+      <button class="nav-item" data-view="recent">
+        <span class="nav-icon">◷</span> Recently added
+      </button>
+
+      <div class="sidebar-label">Playlists</div>
+      <form id="playlistForm" class="playlist-form" aria-label="New playlist form">
+        <input id="playlistNameInput" type="text" maxlength="40" placeholder="Playlist name" aria-label="Playlist name">
+        <input id="playlistCoverInput" type="file" accept="image/*" aria-label="Playlist cover image">
+        <div class="playlist-form-actions">
+          <button type="button" class="cancel-playlist" id="cancelPlaylist">Cancel</button>
+          <button type="submit" class="save-playlist">Save</button>
+        </div>
+      </form>
+      <div id="playlistButtons"></div>
+
+      <div class="sidebar-label">Messages</div>
+      <div id="chatUsers" class="chat-user-list"></div>
+
+      <div class="sidebar-label">School</div>
+      <button class="nav-item" data-view="all">
+        <span class="nav-icon">▾</span> Music
+      </button>
+      <button class="nav-item nav-indent-1" data-view="all">
+        <span class="nav-icon">♪</span> Study playlist
+      </button>
+
+      <div id="settingsPanel" class="settings-panel" aria-live="polite">
+        <strong>School schedule</strong>
+        Auto-loaded from the Notes schedule.
+        <div class="mini-info" id="scheduleInfo">Next end time: --:--</div>
+      </div>
+
+      <div class="period-box">
+        <strong id="countdown">Set period end time</strong>
+        Time left in period
+        <input id="periodEnd" type="time" aria-label="Period end time" readonly>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="main-inner">
+        <div id="chatPanel" class="chat-panel">
+          <div class="chat-header">
+            <strong id="chatUserHeader">Chat</strong>
+            <button id="closeChat" class="chat-close" type="button" aria-label="Back to music">←</button>
+          </div>
+          <div id="chatMessages" class="chat-messages"></div>
+          <div class="chat-input-row">
+            <input id="chatInput" type="text" placeholder="Message..." aria-label="Message">
+            <button id="sendChat" type="button">Send</button>
+          </div>
+        </div>
+
+        <div id="musicView" class="music-view">
+          <section class="album-heading">
+            <div class="cover" aria-label="Music library artwork">♫</div>
+            <div class="album-info">
+              <div class="eyebrow">Playlist</div>
+              <h1 id="pageTitle">All Music</h1>
+              <div class="album-meta">
+                <strong>Notes From Altitude</strong>
+                <span id="trackSummary"> · Your local music library</span>
+              </div>
+            </div>
+          </section>
+
+          <div class="actions">
+            <button class="round-button primary" id="playAll" aria-label="Play all">▶</button>
+            <label class="add-music" for="fileInput">＋ Add music / ZIP</label>
+            <input id="fileInput" type="file" accept="audio/*,.zip" multiple>
+            <input id="playlistCoverEditInput" type="file" accept="image/*" style="display:none;">
+          </div>
+
+          <div class="tracks-head">
+            <span>#</span><span>Title</span><span>Time</span><span></span>
+          </div>
+          <div id="tracks"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <footer class="player">
+    <div class="now-playing">
+      <strong id="currentTitle">Nothing playing</strong>
+      <span id="currentDetail">Add audio files to get started</span>
+    </div>
+
+    <div class="player-center">
+      <div class="controls">
+        <button class="control" id="prev" aria-label="Previous track">⏮</button>
+        <button class="control main" id="play" aria-label="Play">▶</button>
+        <button class="control" id="next" aria-label="Next track">⏭</button>
+      </div>
+      <div class="progress-row">
+        <span id="elapsed">0:00</span>
+        <input id="progress" type="range" min="0" max="1000" value="0" aria-label="Track position">
+        <span id="duration">0:00</span>
+      </div>
+    </div>
+
+    <div class="player-right">
+      <input id="volume" type="range" min="0" max="1" step="0.01" value="0.8" aria-label="Volume">
+    </div>
+  </footer>
+
+  <audio id="audio"></audio>
+
+  <script>
+    const audio = document.querySelector("#audio");
+    const tracksEl = document.querySelector("#tracks");
+    const fileInput = document.querySelector("#fileInput");
+    const search = document.querySelector("#search");
+    const playlistButtons = document.querySelector("#playlistButtons");
+    const playButton = document.querySelector("#play");
+    const playlistForm = document.querySelector("#playlistForm");
+    const playlistNameInput = document.querySelector("#playlistNameInput");
+    const playlistCoverInput = document.querySelector("#playlistCoverInput");
+    const playlistCoverEditInput = document.querySelector("#playlistCoverEditInput");
+    const cancelPlaylistButton = document.querySelector("#cancelPlaylist");
+    const coverEl = document.querySelector(".cover");
+    const mainInner = document.querySelector(".main-inner");
+    const settingsButton = document.querySelector("#settingsButton");
+    const settingsPanel = document.querySelector("#settingsPanel");
+    const scheduleInfo = document.querySelector("#scheduleInfo");
+    const chatButton = document.querySelector("#chatButton");
+    const chatUsersEl = document.querySelector("#chatUsers");
+    const chatPanel = document.querySelector("#chatPanel");
+    const chatUserHeader = document.querySelector("#chatUserHeader");
+    const chatMessages = document.querySelector("#chatMessages");
+    const chatInput = document.querySelector("#chatInput");
+    const sendChatButton = document.querySelector("#sendChat");
+    const closeChatButton = document.querySelector("#closeChat");
+
+    let tracks = [];
+    let playlists = [];
+    let currentIndex = -1;
+    let view = "all";
+    let activePlaylistId = null;
+
+    const DB_NAME = "altitude-music";
+    const STORE_NAME = "tracks";
+    const PLAYLIST_STORE_NAME = "playlists";
+
+    const chatUsers = [
+      { id: "avery", name: "Avery", status: "Online", messages: [
+          { sender: "them", text: "Did you finish the English essay?" },
+          { sender: "me", text: "Almost. I’m just polishing the conclusion." }
+        ] },
+      { id: "milo", name: "Milo", status: "In class", messages: [
+          { sender: "them", text: "Can you send the lab notes?" },
+          { sender: "me", text: "Yep, I’ll upload them in a bit." }
+        ] },
+      { id: "zoe", name: "Zoe", status: "Online", messages: [
+          { sender: "them", text: "The chemistry quiz is Friday." },
+          { sender: "me", text: "Thanks, I’ll study tonight." }
+        ] },
+      { id: "nora", name: "Nora", status: "Away", messages: [
+          { sender: "them", text: "I found a good study playlist." },
+          { sender: "me", text: "Send it over!" }
+        ] }
+    ];
+
+    let activeChatUserId = null;
+
+    function setMainView(mode) {
+      mainInner.classList.toggle("chat-view", mode === "chat");
+      if (mode !== "chat") {
+        chatPanel.classList.remove("visible");
+      }
+    }
+
+function openMusicDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 2);
+
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains(PLAYLIST_STORE_NAME)) {
+        db.createObjectStore(PLAYLIST_STORE_NAME, { keyPath: "id" });
+      }
+    };
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+async function saveTrack(track) {
+  const db = await openMusicDB();
+
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, "readwrite");
+    transaction.objectStore(STORE_NAME).put({
+      id: track.id,
+      file: track.file,
+      name: track.name,
+      added: track.added,
+      playlistIds: track.playlistIds,
+      order: tracks.indexOf(track)
+    });
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error);
+  });
+}
+
+async function savePlaylist(playlist) {
+  const db = await openMusicDB();
+
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(PLAYLIST_STORE_NAME, "readwrite");
+    transaction.objectStore(PLAYLIST_STORE_NAME).put({
+      id: playlist.id,
+      name: playlist.name,
+      cover: playlist.cover || null,
+      createdAt: playlist.createdAt ?? Date.now()
+    });
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error);
+  });
+}
+
+async function loadSavedPlaylists() {
+  const db = await openMusicDB();
+
+  const saved = await new Promise((resolve, reject) => {
+    const request = db.transaction(PLAYLIST_STORE_NAME).objectStore(PLAYLIST_STORE_NAME).getAll();
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+
+  playlists = saved.sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
+  render();
+}
+
+async function deleteSavedTrack(id) {
+  const db = await openMusicDB();
+
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, "readwrite");
+    transaction.objectStore(STORE_NAME).delete(id);
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error);
+  });
+}
+
+async function loadSavedTracks() {
+  const db = await openMusicDB();
+
+  const saved = await new Promise((resolve, reject) => {
+    const request = db.transaction(STORE_NAME).objectStore(STORE_NAME).getAll();
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+
+  saved.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+  tracks = saved.map(item => ({
+    ...item,
+    url: URL.createObjectURL(item.file),
+    duration: NaN
+  }));
+
+  for (const track of tracks) {
+    const probe = new Audio(track.url);
+    probe.addEventListener("loadedmetadata", () => {
+      track.duration = probe.duration;
+      render();
+    }, { once: true });
+  }
+
+  render();
+}
+
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, char => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      }[char]));
+    }
+
+    function timeText(seconds) {
+      if (!Number.isFinite(seconds)) return "0:00";
+      const minutes = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60).toString().padStart(2, "0");
+      return `${minutes}:${secs}`;
+    }
+
+    async function addTrack(file) {
+  const track = {
+    id: crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random()}`,
+    file,
+    name: file.name.replace(/\.[^.]+$/, ""),
+    url: URL.createObjectURL(file),
+    duration: NaN,
+    added: Date.now(),
+    playlistIds: activePlaylistId ? [activePlaylistId] : []
+  };
+
+  tracks.push(track);
+
+  try {
+    await saveTrack(track);
+  } catch (error) {
+    console.error("Could not save this track:", error);
+    alert("The track could not be saved in this browser.");
+  }
+
+  const probe = new Audio(track.url);
+  probe.addEventListener("loadedmetadata", () => {
+    track.duration = probe.duration;
+    render();
+  }, { once: true });
+}
+
+
+    async function addZip(file) {
+      if (!window.JSZip) {
+        alert("The ZIP reader could not load. Check your internet connection and reload.");
+        return;
+      }
+
+      try {
+        const zip = await JSZip.loadAsync(file);
+        const entries = Object.values(zip.files).filter(entry =>
+          !entry.dir && /\.(mp3|m4a|wav|ogg|aac|flac|opus|weba)$/i.test(entry.name)
+        );
+
+        for (const entry of entries) {
+          const name = entry.name.split("/").pop();
+          const blob = await entry.async("blob");
+          addTrack(new File([blob], name, { type: blob.type }));
+        }
+      } catch {
+        alert(`Couldn't open "${file.name}". Check that it is a valid ZIP file.`);
+      }
+    }
+
+    fileInput.addEventListener("change", async event => {
+      for (const file of event.target.files) {
+        if (file.name.toLowerCase().endsWith(".zip")) {
+          await addZip(file);
+        } else if (
+          file.type.startsWith("audio/") ||
+          /\.(mp3|m4a|wav|ogg|aac|flac|opus|weba)$/i.test(file.name)
+        ) {
+          addTrack(file);
+        }
+      }
+      render();
+      fileInput.value = "";
+    });
+
+    function visibleTracks() {
+      let result = tracks.map((track, index) => ({ track, index }));
+
+      if (view === "recent") {
+        result.sort((a, b) => b.track.added - a.track.added);
+      } else if (view === "playlist" && activePlaylistId) {
+        result = result.filter(({ track }) =>
+          track.playlistIds.includes(activePlaylistId)
+        );
+      }
+
+      const query = search.value.trim().toLowerCase();
+      if (query) {
+        result = result.filter(({ track }) =>
+          track.name.toLowerCase().includes(query)
+        );
+      }
+
+      return result;
+    }
+
+    function renderChatUsers() {
+      chatUsersEl.innerHTML = chatUsers.map(user => `
+        <button class="chat-user ${activeChatUserId === user.id ? "active" : ""}" data-chat-user="${user.id}" type="button">
+          <span class="chat-user-name">${escapeHtml(user.name)}</span>
+          <span class="chat-user-status">${escapeHtml(user.status)}</span>
+        </button>
+      `).join("");
+    }
+
+    function openChat(userId) {
+      const user = chatUsers.find(item => item.id === userId);
+      if (!user) return;
+
+      activeChatUserId = userId;
+      chatUserHeader.textContent = user.name;
+      chatMessages.innerHTML = user.messages.map(msg => `
+        <div class="chat-bubble ${msg.sender === "me" ? "outgoing" : "incoming"}">${escapeHtml(msg.text)}</div>
+      `).join("");
+      setMainView("chat");
+      chatPanel.classList.add("visible");
+      renderChatUsers();
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function sendChatMessage() {
+      const user = chatUsers.find(item => item.id === activeChatUserId);
+      const text = chatInput.value.trim();
+      if (!user || !text) return;
+
+      user.messages.push({ sender: "me", text });
+      user.messages.push({ sender: "them", text: "Sounds good!" });
+      openChat(user.id);
+      chatInput.value = "";
+    }
+
+    function render() {
+      playlistButtons.innerHTML = playlists.map(playlist => {
+        const cover = playlist.cover
+          ? `<span class="playlist-thumb" style="background-image: url('${playlist.cover}')"></span>`
+          : `<span class="playlist-thumb placeholder">♫</span>`;
+
+        return `
+          <button class="nav-item ${view === "playlist" &&
+            activePlaylistId === playlist.id ? "active" : ""}"
+            data-playlist="${playlist.id}">
+            ${cover}${escapeHtml(playlist.name)}
+          </button>
+        `;
+      }).join("");
+
+      const visible = visibleTracks();
+      const activePlaylist = playlists.find(item => item.id === activePlaylistId);
+      const title = view === "recent"
+        ? "Recently Added"
+        : view === "playlist"
+          ? (activePlaylist?.name || "Playlist")
+          : "All Music";
+
+      if (coverEl) {
+        if (view === "playlist" && activePlaylist?.cover) {
+          coverEl.style.backgroundImage = `url('${activePlaylist.cover}')`;
+          coverEl.style.backgroundSize = 'cover';
+          coverEl.style.backgroundPosition = 'center';
+          coverEl.textContent = '';
+        } else {
+          coverEl.style.backgroundImage = `radial-gradient(circle at 68% 28%, #d7eaa5 0 7%, transparent 8%), radial-gradient(circle at 28% 72%, #697647 0 18%, transparent 19%), linear-gradient(145deg, #414a30, #171a15 55%, #74814e)`;
+          coverEl.style.backgroundSize = 'cover';
+          coverEl.style.backgroundPosition = 'center';
+          coverEl.textContent = '♫';
+        }
+      }
+
+      document.querySelector("#pageTitle").textContent = title;
+      document.querySelector("#trackSummary").textContent =
+        ` · ${visible.length} ${visible.length === 1 ? "song" : "songs"}`;
+
+      if (!visible.length) {
+        tracksEl.innerHTML = `<div class="empty">${
+          tracks.length
+            ? "No tracks in this view yet."
+            : "Your library is empty. Add audio files or a ZIP archive to get started."
+        }</div>`;
+        return;
+      }
+
+      tracksEl.innerHTML = visible.map(({ track, index }, position) => `
+        <div class="track ${index === currentIndex ? "playing" : ""}"
+     data-index="${index}" draggable="true">
+          <span class="track-number">${position + 1}</span>
+          <span class="track-title">${escapeHtml(track.name)}</span>
+          <span class="track-time">${timeText(track.duration)}</span>
+          <button class="remove" data-remove="${index}" aria-label="Remove track">×</button>
+        </div>
+      `).join("");
+    }
+    
+
+    function playTrack(index) {
+      if (index < 0 || index >= tracks.length) return;
+      currentIndex = index;
+      audio.src = tracks[index].url;
+      document.querySelector("#currentTitle").textContent = tracks[index].name;
+      document.querySelector("#currentDetail").textContent = "Local audio file";
+      audio.play().catch(() => {});
+      render();
+    }
+
+    tracksEl.addEventListener("click", event => {
+      const removeButton = event.target.closest("[data-remove]");
+      if (removeButton) {
+        const index = Number(removeButton.dataset.remove);
+        const removedTrack = tracks[index];
+
+        if (!removedTrack) return;
+
+        URL.revokeObjectURL(removedTrack.url);
+        tracks.splice(index, 1);
+        deleteSavedTrack(removedTrack.id);
+
+        if (index === currentIndex) {
+          audio.pause();
+          audio.removeAttribute("src");
+          currentIndex = -1;
+          document.querySelector("#currentTitle").textContent = "Nothing playing";
+          document.querySelector("#currentDetail").textContent = "Add audio files to get started";
+        } else if (index < currentIndex) {
+          currentIndex--;
+        }
+
+        render();
+        return;
+      }
+
+      const row = event.target.closest(".track");
+      if (row) playTrack(Number(row.dataset.index));
+    });
+
+    function openPlaylistForm() {
+      playlistForm.classList.add("visible");
+      playlistNameInput.focus();
+    }
+
+    function closePlaylistForm() {
+      playlistForm.classList.remove("visible");
+      playlistForm.reset();
+    }
+
+    function readFileAsDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error("Failed to read file"));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function updateActivePlaylistCover(file) {
+      const activePlaylist = playlists.find(item => item.id === activePlaylistId);
+      if (!activePlaylist || !file) return;
+
+      try {
+        activePlaylist.cover = await readFileAsDataUrl(file);
+        await savePlaylist(activePlaylist);
+        render();
+      } catch {
+        alert("The playlist cover could not be updated.");
+      }
+    }
+
+    coverEl.addEventListener("click", () => {
+      if (view !== "playlist" || !activePlaylistId) return;
+      playlistCoverEditInput.click();
+    });
+
+    playlistCoverEditInput.addEventListener("change", async () => {
+      const file = playlistCoverEditInput.files[0];
+      if (!file) return;
+      await updateActivePlaylistCover(file);
+      playlistCoverEditInput.value = "";
+    });
+
+    document.querySelector("#newPlaylist").addEventListener("click", () => {
+      openPlaylistForm();
+    });
+
+    cancelPlaylistButton.addEventListener("click", () => {
+      closePlaylistForm();
+    });
+
+    playlistForm.addEventListener("submit", async event => {
+      event.preventDefault();
+
+      const name = playlistNameInput.value.trim();
+      if (!name) {
+        playlistNameInput.focus();
+        return;
+      }
+
+      let cover = null;
+      const coverFile = playlistCoverInput.files[0];
+      if (coverFile) {
+        try {
+          cover = await readFileAsDataUrl(coverFile);
+        } catch {
+          alert("The playlist cover could not be read.");
+          return;
+        }
+      }
+
+      const playlist = {
+        id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+        name,
+        cover,
+        createdAt: Date.now()
+      };
+
+      playlists.push(playlist);
+      try {
+        await savePlaylist(playlist);
+      } catch (error) {
+        console.error("Could not save playlist:", error);
+        alert("The playlist could not be saved in this browser.");
+      }
+      activePlaylistId = playlist.id;
+      view = "playlist";
+      closePlaylistForm();
+      render();
+    });
+let draggedTrackIndex = null;
+
+tracksEl.addEventListener("dragstart", event => {
+  const row = event.target.closest(".track");
+  if (!row) return;
+
+  draggedTrackIndex = Number(row.dataset.index);
+  row.classList.add("dragging");
+  event.dataTransfer.effectAllowed = "move";
+});
+
+tracksEl.addEventListener("dragover", event => {
+  const row = event.target.closest(".track");
+  if (!row) return;
+
+  event.preventDefault();
+  row.classList.add("drag-over");
+});
+
+tracksEl.addEventListener("dragleave", event => {
+  event.target.closest(".track")?.classList.remove("drag-over");
+});
+
+tracksEl.addEventListener("drop", async event => {
+  const row = event.target.closest(".track");
+  if (!row || draggedTrackIndex === null) return;
+
+  event.preventDefault();
+  const targetIndex = Number(row.dataset.index);
+  const [movedTrack] = tracks.splice(draggedTrackIndex, 1);
+  tracks.splice(targetIndex, 0, movedTrack);
+
+  draggedTrackIndex = null;
+  await Promise.all(tracks.map(saveTrack));
+  render();
+});
+
+tracksEl.addEventListener("dragend", () => {
+  draggedTrackIndex = null;
+  tracksEl.querySelectorAll(".track").forEach(row => {
+    row.classList.remove("dragging", "drag-over");
+  });
+});
+
+    document.querySelector(".sidebar").addEventListener("click", event => {
+      const button = event.target.closest("[data-view], [data-playlist]");
+      if (!button) return;
+
+      setMainView("music");
+
+      if (button.dataset.view) {
+        view = button.dataset.view;
+        activePlaylistId = null;
+      } else {
+        view = "playlist";
+        activePlaylistId = button.dataset.playlist;
+      }
+        
+      document.querySelectorAll(".sidebar .nav-item").forEach(item =>
+        item.classList.toggle("active", item === button)
+      );
+      render();
+    });
+
+    chatUsersEl.addEventListener("click", event => {
+      const button = event.target.closest("[data-chat-user]");
+      if (!button) return;
+      openChat(button.dataset.chatUser);
+    });
+
+    closeChatButton.addEventListener("click", () => {
+      setMainView("music");
+      chatPanel.classList.remove("visible");
+    });
+
+    sendChatButton.addEventListener("click", sendChatMessage);
+    chatInput.addEventListener("keydown", event => {
+      if (event.key === "Enter") {
+        sendChatMessage();
+      }
+    });
+
+    chatButton.addEventListener("click", () => {
+      if (chatUsers[0]) {
+        openChat(chatUsers[0].id);
+      }
+    });
+
+    search.addEventListener("input", render);
+
+    playButton.addEventListener("click", () => {
+      if (currentIndex < 0 && tracks.length) {
+        playTrack(0);
+      } else if (audio.paused) {
+        audio.play();
+      } else {
+        audio.pause();
+      }
+    });
+
+    document.querySelector("#playAll").addEventListener("click", () => {
+      const list = visibleTracks();
+      if (list.length) playTrack(list[0].index);
+    });
+
+    document.querySelector("#next").addEventListener("click", () => {
+      if (tracks.length) playTrack((currentIndex + 1) % tracks.length);
+    });
+
+    document.querySelector("#prev").addEventListener("click", () => {
+      if (tracks.length) playTrack((currentIndex - 1 + tracks.length) % tracks.length);
+    });
+
+    audio.addEventListener("play", () => {
+      playButton.textContent = "Ⅱ";
+      playButton.setAttribute("aria-label", "Pause");
+    });
+
+    audio.addEventListener("pause", () => {
+      playButton.textContent = "▶";
+      playButton.setAttribute("aria-label", "Play");
+    });
+
+    audio.addEventListener("timeupdate", () => {
+      document.querySelector("#elapsed").textContent = timeText(audio.currentTime);
+      document.querySelector("#duration").textContent = timeText(audio.duration);
+
+      if (Number.isFinite(audio.duration) && audio.duration > 0) {
+        document.querySelector("#progress").value =
+          Math.round((audio.currentTime / audio.duration) * 1000);
+      }
+    });
+
+    document.querySelector("#progress").addEventListener("input", event => {
+      if (Number.isFinite(audio.duration) && audio.duration > 0) {
+        audio.currentTime = (Number(event.target.value) / 1000) * audio.duration;
+      }
+    });
+
+    document.querySelector("#volume").addEventListener("input", event => {
+      audio.volume = Number(event.target.value);
+    });
+
+    audio.addEventListener("ended", () => {
+      if (tracks.length) playTrack((currentIndex + 1) % tracks.length);
+    });
+
+    const schoolSchedule = [
+      "08:10",
+      "09:00",
+      "09:50",
+      "10:40",
+      "11:30",
+      "12:20",
+      "13:10",
+      "14:00",
+      "14:50"
+    ];
+
+    function getNextClassEndTime() {
+      const now = new Date();
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+      for (const endTime of schoolSchedule) {
+        const [hours, minutes] = endTime.split(":").map(Number);
+        const totalMinutes = hours * 60 + minutes;
+        if (totalMinutes > currentMinutes) return endTime;
+      }
+
+      return schoolSchedule[0];
+    }
+
+    function updateScheduleDisplay() {
+      const nextEnd = getNextClassEndTime();
+      const periodInput = document.querySelector("#periodEnd");
+      if (!periodInput.value) {
+        periodInput.value = nextEnd;
+      }
+      scheduleInfo.textContent = `Next end time: ${nextEnd}`;
+    }
+
+    function updateClock() {
+      const now = new Date();
+      document.querySelector("#clock").textContent =
+        now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+      const endValue = document.querySelector("#periodEnd").value;
+      const countdown = document.querySelector("#countdown");
+
+      if (!endValue) {
+        countdown.textContent = "Set period end time";
+        return;
+      }
+
+      const [hours, minutes] = endValue.split(":").map(Number);
+      const end = new Date();
+      end.setHours(hours, minutes, 0, 0);
+      if (end <= now) end.setDate(end.getDate() + 1);
+
+      const seconds = Math.floor((end - now) / 1000);
+      countdown.textContent =
+        `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s left`;
+    }
+
+    settingsButton.addEventListener("click", () => {
+      settingsPanel.classList.toggle("visible");
+    });
+
+    chatButton.addEventListener("click", () => {
+      const message = "Chat is ready for class updates and study check-ins.";
+      alert(message);
+    });
+
+    setInterval(updateClock, 1000);
+    updateScheduleDisplay();
+    updateClock();
+    renderChatUsers();
+    loadSavedPlaylists();
+    loadSavedTracks();
+  </script>
+</body>
+</html>
